@@ -31,7 +31,7 @@ export default async function CertificatePage({ params }: { params: { id: string
     'Stable': '#3B82F6',
     'Fragile': '#F59E0B',
     'Declining': '#EF4444',
-  }[c.experience_barometer?.state] ?? '#6B7280'
+  }[c.experience_barometer?.state as "Strong" | "Stable" | "Fragile" | "Declining"] ?? "#6B7280"
 
   const trajectoryIcon = {
     'Improving': '↗',
