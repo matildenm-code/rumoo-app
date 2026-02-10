@@ -12,7 +12,7 @@ import type {
   SignalState,
   GeneratorInputs,
   GeneratorResult,
-} from './rumoo-certificate-types';
+} from './types/certificate';
 
 // ============================================================================
 // RULE-BASED ANALYSIS FUNCTIONS
