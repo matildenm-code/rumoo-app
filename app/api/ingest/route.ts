@@ -7,10 +7,12 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
 import { randomBytes } from 'crypto'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -361,6 +363,7 @@ function buildCertificate(
 // ─── SHARED PIPELINE ─────────────────────────────────────────────────────────
 
 async function runPipeline(propertyId: string, jobId: string, listing: FullCapturePayload) {
+  const supabase = getSupabase()
   try {
     // 1. Geocode
     const geo = await geocodeAddress(listing.address)
@@ -452,6 +455,7 @@ async function runPipeline(propertyId: string, jobId: string, listing: FullCaptu
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body: IngestBody = await request.json()
 
     // ── BRANCH A: full_capture (bookmarklet) ──────────────────────────────
