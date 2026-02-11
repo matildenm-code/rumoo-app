@@ -28,11 +28,32 @@ const CHECKLIST_ICONS: Record<string, string> = {
 
 export default async function CertificatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { data: cert } = await supabase.from('certificates').select('*, spaces(*)').eq('id', id).single()
-  if (!cert) return <div style={{ padding: '2rem' }}>Certificate not found.</div>
+
+  // Fetch certificate — join spaces if space_id exists, properties if property_id exists
+  const { data: cert } = await supabase
+    .from('certificates')
+    .select('*, spaces(*), properties(*)')
+    .eq('id', id)
+    .single()
+
+  if (!cert) return <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>Certificate not found.</div>
 
   const c = cert.certificate_json
-  const space = cert.spaces
+  const space = cert.spaces        // old schema (Lisboa seed data)
+  const property = cert.properties // new schema (ingested via bookmarklet/SMS)
+
+  // Derive display fields from whichever source exists
+  const cityLabel = space?.city || property?.city || ''
+  const neighbourhoodLabel = space?.neighborhood || ''
+  const titleLabel = c.property_identity?.title || space?.name || property?.address || 'Property'
+  const subtitleLabel = space
+    ? `${space.address_label} · ${space.area_m2}m² · Floor ${space.floor} · ${space.property_type}`
+    : property
+    ? [property.address, property.sqft ? `${property.sqft} sqft` : null, property.property_type].filter(Boolean).join(' · ')
+    : ''
+  const priceRaw = space?.listing_price || property?.price
+  const priceLabel = priceRaw ? `$${Number(priceRaw).toLocaleString()}` : null
+
   const isPro = cert.tier === 'pro'
   const stateColor = STATE_COLORS[c.experience_barometer?.state] ?? '#6B7280'
   const trajectoryIcon = TRAJECTORY_ICON[c.experience_barometer?.trajectory] ?? '→'
@@ -43,7 +64,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Serif+Display:ital@0;1&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .fade { animation: fadeUp 0.6s ease forwards; opacity: 0; }
-        .d1{animation-delay:0.1s} .d2{animation-delay:0.2s} .d3{animation-delay:0.3s} .d4{animation-delay:0.4s} .d5{animation-delay:0.5s} .d6{animation-delay:0.6s}
+        .d1{animation-delay:0.1s} .d2{animation-delay:0.2s} .d3{animation-delay:0.3s} .d4{animation-delay:0.4s}
         @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08) !important; }
@@ -65,14 +86,18 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
         <div className="fade" style={{ marginBottom: '2.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
             <div>
-              <p style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#A8A29E', marginBottom: '0.4rem' }}>{space.city} · {space.neighborhood}</p>
-              <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(1.75rem, 4vw, 2.5rem)', fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em', marginBottom: '0.5rem' }}>{c.property_identity?.title || space.name}</h1>
-              <p style={{ fontSize: '0.875rem', color: '#78716C' }}>{space.address_label} · {space.area_m2}m² · Floor {space.floor} · {space.property_type}</p>
+              {(cityLabel || neighbourhoodLabel) && (
+                <p style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#A8A29E', marginBottom: '0.4rem' }}>
+                  {[cityLabel, neighbourhoodLabel].filter(Boolean).join(' · ')}
+                </p>
+              )}
+              <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(1.75rem, 4vw, 2.5rem)', fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em', marginBottom: '0.5rem' }}>{titleLabel}</h1>
+              {subtitleLabel && <p style={{ fontSize: '0.875rem', color: '#78716C' }}>{subtitleLabel}</p>}
             </div>
-            {space.listing_price && (
+            {priceLabel && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <p style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A29E', marginBottom: '0.2rem' }}>Listed at</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.02em' }}>€{Number(space.listing_price).toLocaleString()}</p>
+                <p style={{ fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.02em' }}>{priceLabel}</p>
               </div>
             )}
           </div>
@@ -215,7 +240,6 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
               <div style={{ height: '1px', flex: 1, backgroundColor: '#E7E5E0' }} />
             </div>
 
-            {/* VISIT STRATEGY */}
             {c.visit_strategy && (
               <div style={{ backgroundColor: '#F0F9FF', borderRadius: '20px', padding: '2rem', marginBottom: '1.25rem', border: '1px solid #BFDBFE' }}>
                 <p className="section-title" style={{ color: '#1D4ED8' }}>Visit Strategy</p>
@@ -228,14 +252,13 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
               </div>
             )}
 
-            {/* SILENCE & DRIFT */}
             {c.silence_and_drift && (
               <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '2rem', marginBottom: '1.25rem', border: '1px solid #E7E5E0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <p className="section-title">Silence & Drift</p>
                 <div style={{ display: 'grid', gap: '1.25rem' }}>
                   {[
-                    { label: 'Missing Elements',        items: c.silence_and_drift.missing_elements,        color: '#6B7280' },
-                    { label: 'Hidden Risks',             items: c.silence_and_drift.hidden_risks,             color: '#EF4444' },
+                    { label: 'Missing Elements', items: c.silence_and_drift.missing_elements, color: '#6B7280' },
+                    { label: 'Hidden Risks', items: c.silence_and_drift.hidden_risks, color: '#EF4444' },
                     { label: 'Overlooked Opportunities', items: c.silence_and_drift.overlooked_opportunities, color: '#10B981' },
                   ].map(({ label, items, color }) => (
                     <div key={label}>
@@ -253,7 +276,6 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
               </div>
             )}
 
-            {/* STRATEGIC RISKS */}
             {c.strategic_risks?.risks && (
               <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '2rem', marginBottom: '1.25rem', border: '1px solid #E7E5E0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <p className="section-title">Strategic Risks</p>
