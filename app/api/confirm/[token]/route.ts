@@ -1,21 +1,16 @@
 // app/api/confirm/[token]/route.ts
-// GET  — returns property data for the confirmation form
-// POST — receives confirmed fields, runs pipeline, returns certificate_id
-
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-// ── GET: fetch property by token ──────────────────────────────────────────────
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   const { token } = await params
 
   const { data, error } = await supabase
@@ -35,15 +30,17 @@ export async function GET(
   return Response.json(data)
 }
 
-// ── POST: submit confirmed fields + run pipeline ──────────────────────────────
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   const { token } = await params
 
-  // Fetch property
   const { data: property, error: fetchError } = await supabase
     .from('properties')
     .select('*')
@@ -60,12 +57,10 @@ export async function POST(
 
   const body = await request.json()
 
-  // Validate address
   if (!body.address || body.address.trim().length < 5) {
     return Response.json({ error: 'Address is required' }, { status: 400 })
   }
 
-  // Update property with confirmed data
   const { error: updateError } = await supabase
     .from('properties')
     .update({
@@ -86,7 +81,6 @@ export async function POST(
     return Response.json({ error: `Update failed: ${updateError.message}` }, { status: 500 })
   }
 
-  // Trigger pipeline via /api/ingest internal call
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rumoo-app.vercel.app'
 
   try {
@@ -95,7 +89,7 @@ export async function POST(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         listing: {
-          source_url: property.source_id ? `confirmation:${token}` : `manual:${property.id}`,
+          source_url: `confirmation:${token}`,
           address: body.address,
           price: body.price || property.price,
           beds: body.beds || property.beds,
@@ -105,7 +99,7 @@ export async function POST(
           property_type: body.property_type || property.property_type,
           description: property.description,
           image_urls: property.image_urls || [],
-          _existing_property_id: property.id, // signal to reuse existing record
+          _existing_property_id: property.id,
         },
       }),
     })
